@@ -1,0 +1,668 @@
+import scala.math.{pow, tanh}
+import scala.util.Random
+ 
+class LSTM(var inputArrData: Int, var outputArrData: Int, var dt: Int, var lrs: Double) {
+ 
+  var ip = new Array[Double]((inputArrData + outputArrData))
+  var outRes = Array.ofDim[Double](outputArrData)
+  type arrConst = Array[Array[Double]]
+  var arrGen = new Array[Double](outputArrData)
+  
+  
+  var sizeSum = Array.ofDim[Double](outputArrData, inputArrData + outputArrData)
+  var dumpGroupArrSumMat = Array.fill(outputArrData, inputArrData + outputArrData)(Random.nextDouble())
+ 
+  var Add1DMatx = Array.ofDim[Double](outputArrData, inputArrData + outputArrData)
+  var sumIP = Array.fill(outputArrData, inputArrData + outputArrData)(Random.nextDouble())
+    
+  var Add1D = Array.ofDim[Double](outputArrData, inputArrData + outputArrData)
+  var SumRNM = Array.fill(outputArrData, inputArrData + outputArrData)(Random.nextDouble())
+  
+  var RespAdd1D = Array.ofDim[Double](outputArrData, inputArrData + outputArrData)
+  var sumOP = Array.fill(outputArrData, inputArrData + outputArrData)(Random.nextDouble())
+ 
+  def calcFunc(ArrData : Array[Double]) : Array[Double] = {
+    var resultOfA = ArrData.map(a => updateFunc1(a))
+    return resultOfA
+  }
+ 
+  def updateFunc1(const : Double): Double = {
+    var changeconst = const/(-1)
+    var sgm = 1+math.exp(changeconst)   
+    return 1/sgm
+  }
+ 
+ 
+  def mapFunc(ArrData : Array[Double]) : Array[Double] = {
+    return ArrData.map(a => tanh(a))
+  }
+  
+  def arrMultFunc(arr1 : arrConst, arr2 : Array[Double]) : Array[Double] = {
+    val rArrs1 = arr1.size
+    val rArrs2 = arr2.size
+    var DP = Array.ofDim[Double](rArrs1)
+    for(epch0 <- 0 to rArrs1 - 1) {
+      for(epch1 <- 0 to rArrs2 - 1) {
+        DP(epch0) = DP(epch0) + (arr1(epch0)(epch1) * arr2(epch1))
+      }
+    }
+    return DP
+  }
+ 
+  def updateFunc(ArrData : Array[Double]) : Array[Double] = {
+    var resultOfA = ArrData.map(a => 1 - pow(tanh(a),2))
+    return resultOfA
+  }
+ 
+  def sgmFunc(ArrData : Array[Double]) : Array[Double] = {
+    var resultOfA = ArrData.map(a => ((1-updateFunc1(a)) * (updateFunc1(a))))
+    return resultOfA
+  }  
+ 
+  def minus(s1 : Array[Double], s2 : Array[Double]) : Array[Double] = {
+    var ttl = s1.zip(s2)
+    return ttl.map { case (p, q) => p - q }
+  }
+  def addition(s1 : Array[Double], s2 : Array[Double]) : Array[Double] = {
+    var ttl = s1.zip(s2)
+    return ttl.map { case (p, q) => p + q }
+  }
+  def arrMultFunc2(arr1 : arrConst , arr2 : arrConst) : arrConst = {
+    val rArrs1 = arr1.size
+    val rArrs2 = arr2.size
+    
+    val cArrs1 = arr1(0).size
+    val cArrs2 = arr2(0).size
+ 
+    var DP = Array.ofDim[Double](rArrs1, cArrs2)
+    for(epch0 <- 0 to arr1.size - 1) {
+      for (epch1 <- 0 to arr2(0).size - 1) {
+        for (epch2 <- 0 to arr1(0).size - 1) {
+          DP(epch0)(epch1) += arr1(epch0)(epch2) * arr2(epch2)(epch1)
+        }
+      }
+    }
+ 
+    return DP
+  }
+  
+ 
+ 
+  def MultFunc(s1 : Array[Double], s2 : Array[Double]) : Array[Double] = {
+    var ttl = s1.zip(s2)
+    return ttl.map { case (p, q) => p * q }
+  }
+    
+  def matrixMinus1(s1 : arrConst, s2 : arrConst) : arrConst = {
+    return s1.zip(s2).map{case(a,b) => a.zip(b).map{case(p,q) => p - q}}
+  }
+ 
+  def matrixMult1(s1 : arrConst, s2 : arrConst) : arrConst = {
+    return s1.zip(s2).map{case(a,b) => a.zip(b).map{case(p,q) => p * q}}
+  }
+  
+  def matrixAdd1(s1 : arrConst, s2 : arrConst) : arrConst = {
+    return s1.zip(s2).map{case(a,b) => a.zip(b).map{case(p,q) => p + q}}
+  }
+ 
+  def arrPowerOf(input2Darr : arrConst) : arrConst = {
+    return input2Darr.map{ArrData => ArrData.map(inner => math.sqrt(inner))}
+  }
+ 
+  def matrixMult2(input2Darr : arrConst, static        
+                  : Double) : arrConst = {
+    return input2Darr.map{one => one.map(two => two * static)}
+  }
+ 
+  def matrixAdd2(input2Darr : arrConst, constNo : Double) : arrConst = {
+    return input2Darr.map{one => one.map(two => two + constNo)}
+  }
+ 
+  def matrixDiv2(input2Darr : arrConst, constNo : Double) : arrConst = {
+    return input2Darr.map{one => one.map(two => constNo / two)}
+  }
+ 
+ 
+ 
+  def fSignal() = {
+    val a = calcFunc(arrMultFunc(sumIP,ip))
+    val b = calcFunc(arrMultFunc(dumpGroupArrSumMat, ip))
+    val c = calcFunc(arrMultFunc(sumOP, ip))
+    val d = mapFunc(arrMultFunc(SumRNM, ip))
+ 
+    val p1 = MultFunc(arrGen,b)
+    val p2 = MultFunc(d,a)
+    arrGen = addition(p1, p2)
+    outRes = MultFunc(c, mapFunc(arrGen))
+    (arrGen, outRes, b, a, d, c)
+  }
+ 
+  def matrixDiv2(arrTranc  : Array[Array[Double]],  transCL : Array[Array[Double]], transUD : Array[Array[Double]], transCalc :  Array[Array [Double]]) :  Unit = {
+    
+    var a = 0.15
+    var b = 0.85
+    var ipArr = matrixMult2(matrixMult1(arrTranc, arrTranc), a)
+    sizeSum = matrixMult2(sizeSum, b)
+    sizeSum = matrixAdd1(sizeSum, ipArr)
+ 
+    var calc1D = matrixMult2(matrixMult1(transUD, transUD), a)
+    Add1D = matrixMult2(Add1D, b)
+    Add1D = matrixAdd1(Add1D, calc1D)
+    
+    var Add1Dop = matrixMult2(matrixMult1(transCalc, transCalc), a)
+    RespAdd1D = matrixMult2(RespAdd1D, b)
+    RespAdd1D = matrixAdd1(RespAdd1D, Add1Dop)
+ 
+    var ddMatx = matrixMult2(matrixMult1(transCL, transCL), a)
+    Add1DMatx = matrixMult2(Add1DMatx, b)
+    Add1DMatx = matrixAdd1(Add1DMatx, transCL)
+ 
+    var dump = matrixAdd2(sizeSum, pow(10.0, -8))
+    dump = matrixDiv2(arrPowerOf(dump), lrs)
+    dump = matrixMult1(dump, arrTranc)
+    dumpGroupArrSumMat = matrixMinus1(dumpGroupArrSumMat, dump)
+ 
+    dump = matrixAdd2(Add1DMatx, pow(10.0,-8))
+    dump = matrixDiv2(arrPowerOf(dump), lrs)
+    dump = matrixMult1(dump, transCL)
+    sumIP = matrixMinus1(sumIP, dump)
+ 
+    dump = matrixAdd2(Add1D, pow(10.0,-8))
+    dump = matrixDiv2(arrPowerOf(dump), lrs)
+    dump = matrixMult1(dump, transUD)
+    SumRNM = matrixMinus1(SumRNM, dump)
+ 
+    dump = matrixAdd2(RespAdd1D, pow(10.0,-8))
+    dump = matrixDiv2(arrPowerOf(dump), lrs)
+    dump = matrixMult1(dump, transCalc)
+    sumOP = matrixMinus1(sumOP, dump)
+  }
+ 
+  def bSignal(finalArrSignal : Array[Double] , bfInitiateArr : Array[Double], ip1D : Array[Double], sgn : Array[Double], find1D : Array[Double], send1D : Array[Double], UpdateArr : Array[Double], UpdateSignalArr : Array[Double]) = {
+ 
+    var ISTfd = addition(finalArrSignal, UpdateSignalArr)
+    var PdtSend = MultFunc(mapFunc(arrGen), finalArrSignal)
+ 
+    var dump = MultFunc(finalArrSignal,send1D)
+    dump = MultFunc(dump,updateFunc(arrGen))
+    var sumArr = addition(dump, UpdateArr)
+ 
+    var initList = MultFunc(sumArr, ip1D)
+    var inputArrProduct = MultFunc(sumArr, bfInitiateArr)
+    var prodList = MultFunc(sumArr, find1D)
+    var givenArr = (ip.grouped(ip.size).toArray)
+    dump = MultFunc(PdtSend, sgmFunc(send1D))
+    var transposeArr = (dump.grouped(dump.size).toArray).transpose
+    
+ 
+    dump = MultFunc(inputArrProduct, sgmFunc(ip1D))
+    var dumpGroupArr = (dump.grouped(dump.size).toArray).transpose
+    dump = MultFunc(prodList, sgmFunc(sgn))
+    var trans = (dump.grouped(dump.size).toArray).transpose
+    var transCL = arrMultFunc2(trans, givenArr)
+    var transCalc = arrMultFunc2(transposeArr, givenArr)
+    var calcArrProduct = MultFunc(sumArr, sgn)
+    
+    dump = MultFunc(calcArrProduct, sgmFunc(find1D))
+    var transNew = (dump.grouped(dump.size).toArray).transpose
+    var arrTranc = arrMultFunc2(dumpGroupArr, givenArr)
+    var transUD = arrMultFunc2(transNew, givenArr)
+ 
+    var p = (arrMultFunc2(calcArrProduct.grouped(calcArrProduct.size).toArray, SumRNM))(0)
+    var q = (arrMultFunc2(PdtSend.grouped(PdtSend.size).toArray, sumOP))(0)
+    var r = (arrMultFunc2(prodList.grouped(prodList.size).toArray, sumIP))(0)
+    var s = (arrMultFunc2(inputArrProduct.grouped(inputArrProduct.size).toArray, dumpGroupArrSumMat))(0)
+ 
+    var o1 = addition(p, q)
+    var o2 = addition(r, s)
+ 
+    var finalUpdate = addition(o1, o2)
+    (arrTranc, transCL, transUD, transCalc, initList, finalUpdate)
+  }
+}
+ 
+ 
+ 
+ 
+import lstm.LSTM
+ 
+import scala.Array.range
+import scala.util.Random
+ 
+import org.apache.spark.{SparkContext}
+import org.apache.spark.sql.{DataFrame, SparkSession}
+import org.apache.spark.sql.functions.{abs, monotonically_increasing_id}
+ 
+ 
+class recNet(var inpDetails: DataFrame, var outDetails: DataFrame, var hlNo: Int, var lp: Double, var dx: Int, val myspark: SparkSession, val contSprx: SparkContext) {
+ 
+  import myspark.sqlContext.implicits._
+  type arrConst = Array[Array[Double]]
+  var inputValue = inpDetails.columns.size
+  val otDt = 1
+  var getol = Array.ofDim[ Double ](dx+1, otDt)
+  
+  var getil = Array.ofDim[Double](dx+1, hlNo)
+  var hldata = Array.ofDim[Double](dx+1, hlNo)
+ 
+  var iData =  Array.fill(otDt, hlNo)(Random.nextDouble())
+  var newiData = Array.ofDim[Double](otDt, hlNo)
+ 
+  var llOfh1 = Array.ofDim[Double](dx+1, hlNo)
+  var llInp = Array.ofDim[Double](dx+1, hlNo)
+  var llUpdate = Array.ofDim[Double](dx+1, hlNo)
+  var llOut = Array.ofDim[Double](dx+1, hlNo)
+ 
+  val fracDes = 0.950
+  val fracVar = 0.10
+  val sumOfcomp = 1e-9
+ 
+  var LSTM = new LSTM(inputValue, hlNo, dx, lp)
+ 
+  def calcFunc(input : Array[ Double ]) : Array[ Double ] = {
+    var ans = input.map(dummyVar => updateFunc1(dummyVar))
+    return ans
+  }
+ 
+  def sgmFunc(ArrData : Array[Double]) : Array[Double] = {
+    var resultOfA = ArrData.map(i1 => (updateFunc1(i1) * (1 - updateFunc1(i1))))
+    return resultOfA
+  }
+  def updateFunc1(const : Double) : Double = {
+    var changeconst = const/(-1)
+    var ans = 1/(1+math.exp(changeconst))
+    
+    return ans
+  }
+ 
+  
+ 
+  def matrixMult2(ArrData : arrConst, static        
+                  : Double) : arrConst = {
+    return ArrData.map{i1 => i1.map(i2 => i2 * static)}
+  }
+ 
+  def arrTranc(ArrData : arrConst, constNo : Double) : arrConst = {
+    return ArrData.map{dummyVar => dummyVar.map(i2 => math.pow(i2, constNo))}
+  }
+ 
+  def mxSum1(s1 : arrConst, s2 : arrConst) : arrConst = {
+    return s1.zip(s2).map{case(p,q) => p.zip(q).map{case(x,y) => x + y}}
+  }
+ 
+  def matrixAdd2(arrInpd : arrConst, constNo : Double) : arrConst = {
+    return arrInpd.map{i1 => i1.map(i2 => i2 + constNo)}
+  }
+ 
+  def matrixDiv2(ArrData : arrConst, constNo : Double) : arrConst = {
+    return ArrData.map{i1 => i1.map(i2 => constNo/i2)}
+  }
+ 
+  def matrixDiv2arr(ArrData : arrConst, constNo : Double) : arrConst = {
+    return ArrData.map{i1 => i1.map(i2 => (i2/constNo))}
+  }
+ 
+  def matPowerOf(ArrData : arrConst) : arrConst = {
+    return ArrData.map{i1 => i1.map(i2 => math.sqrt(i2))}
+  }
+ 
+  def matrixMult1(s1 : arrConst, s2 : arrConst) : arrConst = {
+    return s1.zip(s2).map{case(p,q) => p.zip(q).map{case(x,y) => x * y}}
+  }
+ 
+  def matrixMinus1(s1 : arrConst, s2 : arrConst) : arrConst = {
+    return s1.zip(s2).map{case(p,q) => p.zip(q).map{case(x,y) => x - y}}
+  }
+ 
+  def newProdArr(ArrData : Array[Double], constNo : Double) : Array[Double] = {
+    return ArrData.map(i1 => i1 * constNo)
+  }
+ 
+  def arrMultFunc(arr1 : arrConst, arr2 : Array[Double]) : Array[Double] = {
+    
+    var ans = Array.ofDim[Double](arr1.size)
+    for(epch0 <- 0 to arr1.size - 1) {
+      for(epch1 <- 0 to arr2.size - 1) {
+        ans(epch0) = ans(epch0) + (arr1(epch0)(epch1) * arr2(epch1))
+      }
+    }
+    return ans
+  }
+ 
+  def arrMultFunc2(arr1 : arrConst , arr2 : arrConst) : arrConst = {
+    val rArrs1 = arr1.size
+    val rArrs2 = arr2.size
+    
+    val cArrs1 = arr1(0).size
+    val cArrs2 = arr2(0).size
+ 
+    var ans = Array.ofDim[Double](rArrs1, cArrs2)
+    for(epch0 <- 0 to rArrs1 - 1) {
+      for (epch1 <- 0 to cArrs2 - 1) {
+        for (epch2 <- 0 to cArrs1 - 1) {
+          ans(epch0)(epch1) += arr1(epch0)(epch2) * arr2(epch2)(epch1)
+        }
+      }
+    }
+ 
+    return ans
+}
+  def fSignal(dsEr : DataFrame, btchLen : Int) : DataFrame = {
+    var dataSUpt = dsEr.select("*").withColumn("rowid", monotonically_increasing_id())
+    for(mp <- 1 to btchLen-1){
+      var dr = (dataSUpt.select("*").where($"rowid" === mp).drop("rowid").collect.map(_.toSeq).flatten)
+      LSTM.ip = hldata(mp-1) ++ dr.map(_.toString.toDouble)
+      val(getilNo, hlNo, llOfh1No, llInpNo, llUpdateNo, llOutNo) = LSTM.fSignal()
+      getil(mp) = getilNo
+      hldata(mp) = hlNo
+      llOfh1(mp) = llOfh1No
+      llInp(mp) = llInpNo
+      llUpdate(mp) = llUpdateNo
+      llOut(mp) = llOutNo
+      getol(mp) = calcFunc(arrMultFunc(iData, hlNo))
+    }
+    var rId = range(-1, btchLen)
+ 
+    return (contSprx.parallelize(getol zip rId)).toDF()
+  }
+ 
+  def iData(meanDiff : Array[Array[Double]]): Unit = {
+    var i1 = matrixMult2(newiData, fracDes)
+    var i2 = matrixMult2(arrTranc(meanDiff, 2.0), fracVar)
+    newiData = mxSum1(i1, i2)
+ 
+    var gdOut = matrixAdd2(newiData, sumOfcomp)
+ 
+    i1 = matPowerOf(gdOut)
+    i2 = matrixDiv2(i1, lp)
+    i2 = matrixMult1(i1, i2)
+    iData = matrixMinus1(iData, i2)
+  }
+ 
+  def bSignal(otSamp : DataFrame, dsEr : DataFrame) : Double = {
+    var sEr = 0.0
+    
+    var usOut = otSamp.select("*").withColumn("rowid", monotonically_increasing_id())
+    var dataSUpt = dsEr.select("*").withColumn("rowid", monotonically_increasing_id())
+    
+    var cUtI = Array.ofDim[Double](hlNo)
+    var cHiI = Array.ofDim[Double](hlNo)
+    var updLk = Array.ofDim[Double](hlNo, inputValue + hlNo)
+    var calcLk = Array.ofDim[Double](hlNo, inputValue + hlNo)
+    var cAddtd = Array.ofDim[Double](otDt, hlNo)
+    var Lkot = Array.ofDim[Double](hlNo, inputValue + hlNo)
+    var inpLk = Array.ofDim[Double](hlNo, inputValue + hlNo)
+ 
+    
+    for(mp <- dx - 1 to 1 by -1){
+      var dr = (usOut.select("*").where($"rowid" === mp).drop("rowid").collect.map(_.toSeq).flatten).map(_.toString.toDouble)
+      var mcPt = (getol(mp)(0) - dr(0)) 
+      sEr += mcPt
+ 
+      var i1 = newProdArr(sgmFunc(getol(mp)), mcPt)
+      var i2 = i1.grouped(i1.size).toArray
+      var tx = (hldata(mp)).grouped((hldata(mp)).size).toArray
+      i2 = arrMultFunc2(i2, tx)
+      cAddtd = mxSum1(cAddtd, i2)
+ 
+      var inpr1 = (dataSUpt.select("*").where($"rowid" === mp).drop("rowid").collect.map(_.toSeq).flatten)
+      var lsNoacc = newProdArr(iData(0), mcPt)
+      LSTM.ip = hldata(mp-1) ++ inpr1.map(_.toString.toDouble)
+      LSTM.arrGen = getil(mp)
+ 
+      val(dfg, dIpG, dAtG, dOg, dCsS, dhS) = LSTM.bSignal(lsNoacc, getil(mp-1), llOfh1(mp), llInp(mp), llUpdate(mp), llOut(mp), cUtI, cHiI)
+ 
+      cUtI = dCsS
+      cHiI = dhS
+      inpLk = mxSum1(inpLk, dfg)
+      updLk = mxSum1(inpLk, dIpG)
+      calcLk = mxSum1(inpLk, dAtG)
+      Lkot = mxSum1(inpLk, dOg)
+    }
+ 
+    LSTM.calc2DMatrix(matrixDiv2(inpLk, dx), matrixDiv2(updLk, dx), matrixDiv2(calcLk, dx), matrixDiv2(Lkot, dx))
+ 
+    iData(matrixDiv2(cAddtd, dx))
+ 
+    return sEr
+  }
+ 
+  def newOt(dsEr : DataFrame, otSamp : DataFrame, btchLen : Int) : DataFrame = {
+    var dx = btchLen
+    var totOp = otSamp
+    var dataSUpt = dsEr.select("*").withColumn("rowid", monotonically_increasing_id())
+    var usOut = otSamp.select("*").withColumn("rowid", monotonically_increasing_id())
+    getil = Array.ofDim[Double](dx+1, hlNo)
+    getol = Array.ofDim[Double](dx+1, otDt)
+    hldata = Array.ofDim[Double](dx+1, hlNo)
+    llOfh1 = Array.ofDim[Double](dx+1, hlNo)
+    llInp = Array.ofDim[Double](dx+1, hlNo)
+    llUpdate = Array.ofDim[Double](dx+1, hlNo)
+    llOut = Array.ofDim[Double](dx+1,hlNo)
+    var ctNoAcc = 0.0
+    
+ 
+    for(mp <- 1 to dx-1){
+ 
+      var dtR = (dataSUpt.select("*").where($"rowid" === mp).drop("rowid").collect.map(_.toSeq).flatten)
+      LSTM.ip = hldata(mp-1) ++ dtR.map(_.toString.toDouble) 
+      val(getilNo, hlNo, llOfh1No, llInpNo, llUpdateNo, llOutNo) = LSTM.fSignal()
+ 
+      getil(mp) = getilNo
+      hldata(mp) = hlNo
+      llOfh1(mp) = llOfh1No
+      llInp(mp) = llInpNo
+      llUpdate(mp) = llUpdateNo
+      llOut(mp) = llOutNo
+ 
+      getol(mp) = calcFunc(arrMultFunc(iData, hlNo))
+      var inpr1 = (usOut.select("*").where($"rowid" === mp).drop("rowid").collect.map(_.toSeq).flatten).map(_.toString.toDouble)
+      var mcPt = math.abs(getol(mp)(0) - inpr1(0))  
+      ctNoAcc = ctNoAcc + mcPt
+    }
+ 
+    var rId = range(-1, btchLen)
+    return (contSprx.parallelize(getol zip rId)).toDF()
+    
+  }
+}
+ 
+//Mounting AWS S3 bucket
+ 
+val AccessKey = "AKIAUTT3V3EZQ77A4H6Y"
+ 
+val SecretKey = "E2ekFBnhCRVzsgGh96aPh4idHkU6kK0MbdWWKDoP".replace("/", "%2F")
+val AwsBucketName = "6350project"
+val MountName = "Project"
+ 
+dbutils.fs.mount(s"s3a://$AccessKey:$SecretKey@$AwsBucketName", s"/mnt/$MountName")
+display(dbutils.fs.ls(s"/mnt/$MountName"))
+//Main code
+ 
+import rnn.recNet
+ 
+import scala.collection.mutable.ListBuffer
+import Array._
+ 
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.functions.monotonically_increasing_id
+ 
+import org.apache.spark.ml._
+import org.apache.spark.ml.feature.MinMaxScaler
+import org.apache.spark.ml.feature.VectorAssembler
+ 
+object StockPrediction {
+ 
+  def main(args: Array[String]): Unit = {
+ 
+    val ss = SparkSession
+      .builder()
+      .appName("ProjectRNN")
+      .config("driver", "org.postgresql.Driver")
+      .getOrCreate();
+ 
+    val contS = ss.sparkContext
+    import ss.sqlContext.implicits._
+ 
+    
+ 
+    val dt = contS.wholeTextFiles("/mnt/Project/GE_2006-01-01_to_2018-01-01.csv").map{case(a, b) => a}.toDF()
+ 
+    
+    var lrs = List(0.01, 0.05)
+    var btch = List(1, 4)
+    var hl = List(1)
+    var Iter = List(1)
+ 
+    
+    var iters = new ListBuffer[Int]()
+    var hls = new ListBuffer[Int]()
+    var lrA = new ListBuffer[Double]()
+    var btchs = new ListBuffer[Int]()
+    var tnErr = new ListBuffer[Double]()
+    var ttErr = new ListBuffer[Double]()
+ 
+    dt.collect().foreach{ entry =>
+ 
+      var totDf = ss.read.format("csv")
+        .option("sep", ",")
+        .option("inferSchema", "true")
+        .option("header", "true")
+        .load(entry(0).toString)
+ 
+      if(totDf.count > 1500) {
+ 
+        totDf = totDf.drop("Date").drop("OpenInt")
+ 
+        var norml = new MinMaxScaler()
+          .setMax(1)
+          .setMin(0)
+ 
+        var joinr = new VectorAssembler()
+          .setInputCols(Array("Open", "High", "Low", "Close", "Volume"))
+          .setOutputCol("features").setHandleInvalid("skip")
+ 
+        var dataFrm = joinr.transform(totDf)
+        var normlVals = norml.setInputCol("features").setOutputCol("scaledFeatures").fit(dataFrm).transform(dataFrm)
+          .drop("Open")
+          .drop("High")
+          .drop("Low")
+          .drop("Close")
+          .drop("Volume")
+          .drop("features")
+ 
+        val dL = udf( (a: linalg.Vector) => a.toArray )
+ 
+        val lDF = normlVals.withColumn("featuresArr" , dL($"scaledFeatures") )
+ 
+        val aId = Array("Open", "High", "Low", "Close", "Volume")
+ 
+        val qry = aId.zipWithIndex.map{ case (titl, loc) => col("featuresArr").getItem(loc).as(titl) }
+ 
+        var actVals = lDF.select(qry : _*).withColumn("rwNo", monotonically_increasing_id())
+ 
+        var nxtDCls = actVals.select($"Close".alias("nxtDcls")).where($"rwNo" > 0)
+          .withColumn("rwNo1", monotonically_increasing_id())
+ 
+        actVals = actVals.join(nxtDCls, actVals("rwNo") === nxtDCls("rwNo1"), "inner").drop("rwNo1")
+        var length = actVals.count
+        val splt = 0.7
+        var acValInA = actVals.select("*").where($"rwNo" < length*splt).drop("nxtDcls")
+        var acValInB = actVals.select($"nxtDcls", $"rwNo").where($"rwNo" < length*splt)
+        var acLen = acValInA.count.toInt
+        var acvalA = actVals.select("*").where($"rwNo" >= length*splt).drop("nxtDcls")
+        var acvalB = actVals.select($"nxtDcls", $"rwNo").where($"rwNo" >= length*splt)
+        var acLenAB = acvalA.count.toInt
+        var teR = 0.0
+        println("Initialised training.............")
+ 
+        for(a <- Iter) {
+          for (b <- hl) {
+            for (c <- lrs) {
+              for (d <- btch) {
+                var recNet = new recNet(acValInA.select("*").drop("rwNo"), acValInB.select("*").drop("rwNo"), b, c, d, ss, contS)
+                for (e <- 1 to a) {
+ 
+                  var entrStart = 0
+                  var metricTr = 0
+                  var errBtch = 0.0
+                  for (entryEnd <- d until acLen by d){
+ 
+                    var valOut = recNet.fSignal(acValInA.select("*").where($"rwNo" >= entrStart and $"rwNo" < entryEnd).drop("rwNo"), entryEnd - entrStart).toDF("predicted", "rwNo")
+                    
+                    var modCng = recNet.bSignal(acValInB.select("*").where($"rwNo" >= entrStart and $"rwNo" < entryEnd).drop("rwNo"), acValInA.select("*").where($"rwNo" >= entrStart and $"rwNo" < entryEnd).drop("rwNo"))
+                    
+                    valOut = valOut.select($"predicted"(0).as("Close"), $"rwNo").where($"rwNo" > -1)
+                    var orgOutTp = acValInB.select("*").where($"rwNo" >= entrStart and $"rwNo" < entryEnd).drop("rwNo")
+                    orgOutTp = orgOutTp.select("*").withColumn("rwNo", monotonically_increasing_id())
+                    var meanBCng = valOut.join(orgOutTp, valOut("rwNo") === orgOutTp("rwNo"), "inner").drop("rwNo")
+                    meanBCng = meanBCng.withColumn("sub", $"Close" - $"nxtDcls")
+                    meanBCng = meanBCng.withColumn("mse", $"sub" * $"sub").agg(sum("mse").as("sum"))
+                    var cng = meanBCng.select("sum").rdd.map(a => a(0).asInstanceOf[Double]).collect.toList
+                    errBtch += cng(0)
+                    entrStart = entryEnd
+                    
+                  }
+                  
+ 
+                  teR = math.sqrt(errBtch/acLen)
+                }
+ 
+                iters += a
+                hls += b
+                lrA += c
+                btchs += d
+                tnErr += teR
+ 
+         
+                var predRes = recNet.newOt(acvalA.select("*").drop("rwNo"), acvalB.select("*").drop("rwNo"), acLenAB).toDF("predicted", "rwNo")
+                predRes = predRes.select($"predicted"(0).as("Close"), $"rwNo").where($"rwNo" > -1)
+                acvalB = acvalB.select("*").drop("rwNo")
+                acvalB = acvalB.select("*").withColumn("rwNo", monotonically_increasing_id())
+                
+                var meanNewErr = predRes.join(acvalB, predRes("rwNo") === acvalB("rwNo"), "inner").drop("rwNo")
+                meanNewErr = meanNewErr.withColumn("sub", $"Close" - $"nxtDcls")
+                meanNewErr = meanNewErr.withColumn("mse", $"sub"*$"sub").agg(sum("mse").as("sum"))
+ 
+                var newInac = meanNewErr.select("sum").rdd.map(a => a(0).asInstanceOf[Double]).collect.toList
+ 
+                var meanErrNew = math.sqrt(newInac(0)/acLenAB)
+ 
+                ttErr += meanErrNew
+ 
+                println("iters : " + a + ", hl : " + b + ", lrs : " + c + ", btch : " + d + ", ErrTr : " + teR + ", ErrNew : " + meanErrNew)
+              }
+            }
+          }
+        }
+      }
+    }
+ 
+    val iterRs = contS.parallelize(iters)
+    val hlRs = contS.parallelize(hls)
+    val lrRs = contS.parallelize(lrA)
+    val btchRs = contS.parallelize(btchs)
+    val orgMeanErrRs = contS.parallelize(tnErr)
+    val newMeanErrRs = contS.parallelize(ttErr)
+ 
+ 
+    val dataFl = iterRs
+      .zip(hlRs)
+      .zip(lrRs)
+      .zip(btchRs)
+      .zip(orgMeanErrRs)
+      .zip(newMeanErrRs)
+      .map(a => (a._1._1._1._1._1, a._1._1._1._1._2, a._1._1._1._2, a._1._1._2, a._1._2, a._2))
+ 
+    var answ = dataFl.toDF("iters", "HL", "LR", "Samples", "ErrTr", "ErrTs")
+ 
+    answ.coalesce(1)
+      .write.format("com.databricks.spark.csv")
+      .option("header", "true")
+      .csv("/mnt/Project/output_test1.csv")
+ 
+ 
+  }
+}
+StockPrediction.main(Array())
